@@ -1,0 +1,112 @@
+select * from presupuestos_cab
+
+select * from presupuestos_det
+
+select * from items
+
+
+create view v_presupuestos_cab as
+
+select	a.presu_cod,
+    a.presu_nro as nro,
+    a.presu_fecha,
+    a.presu_estado,
+    a.presu_validez,
+    a.emp_cod,
+    d.emp_nom,
+    d.emp_ruc,
+    d.emp_dir,
+    d.emp_tel,
+    d.emp_email,
+    a.suc_cod,
+    e.suc_nom,
+    e.suc_dir,
+    e.suc_tel,
+    e.suc_email,
+    a.fun_cod,
+    c.fun_nom,
+    c.fun_ape,
+    a.cli_cod,
+    f.cli_ruc,
+    f.cli_nom,
+    f.cli_ape,
+    f.cli_dir,
+    f.cli_email
+
+    from presupuestos_cab a,
+    v_funcionarios c,
+    empresas d,
+    sucursales e,
+    v_clientes f
+
+    where a.emp_cod = d.emp_cod and a.suc_cod = e.suc_cod and a.fun_cod = c.fun_cod and a.cli_cod = f.cli_cod;
+
+
+    CREATE OR REPLACE VIEW v_presupuestos_det AS 
+ SELECT d.presu_cod,
+    d.item_cod,
+    i.item_desc,
+    d.presu_cantidad,
+    d.presu_precio
+   FROM presupuestos_det d,
+    v_items i
+  WHERE d.item_cod = i.item_cod;
+
+
+
+select sp_presu (0,1,'30/11/2018',1,1,1,1,'{{1,10,455000}}','insercion')
+
+-- Function: sp_presu(integer, integer, date, integer, integer, integer, integer, integer[], character varying)
+
+-- DROP FUNCTION sp_presu(integer, integer, date, integer, integer, integer, integer, integer[], character varying);
+
+CREATE OR REPLACE FUNCTION sp_presu(codigo integer, nro integer, val date, sucur integer, empre integer, funcio integer, cli integer, detalle integer[], operacion character varying)
+  RETURNS text AS
+$BODY$
+declare dimen integer = array_length(detalle, 1);
+	ultcod integer;
+	det record;
+	presu integer;
+begin
+	-- PRIMERO TRABAJAMOS POR LA CABECERA DE VENTAS
+	select coalesce(max(presu_cod),0)+1 into ultcod from presupuestos_cab; -- CALCULAMOS EL ULTMICO CODIGO DE VENTAS
+	if operacion = 'insercion' then
+	
+		insert into presupuestos_cab
+		values(ultcod, nro, current_date, val,'PENDIENTE', sucur, empre, funcio, cli);-- GRABAMOS UN NUEVO REGISTRO EN VENTAS CON LOS VALORES DE SUBTOTALES EN CERO LUEGO LO ACTUALIZAREMOS
+
+		-- AHORA COMENZAMOS A TRABAJAR POR EL DETALLE
+		for i IN 1..dimen -- MIETRAS HAYA FILAS EN LA MATRIZ LO RECORREMOS
+		loop
+		
+			insert into presupuestos_det
+			
+			values(ultcod,detalle[i][1]::integer,detalle[i][2]::integer,detalle[i][3]::integer);
+			
+			
+			
+			
+			
+		end loop;
+	
+
+		
+				
+		raise notice '%','EL presupuestos_cab '||ultcod||' FUE GRABADO CON EXITO';
+
+		return ''||ultcod||'';
+		
+	end if; -- FIN SI DE OPERACION = INSERCION
+
+	
+	if operacion = 'anulacion' then
+		update presupuestos_cab set presu_estado = 'ANULADO' where presu_cod = codigo;
+		raise notice '%','El RECORDATORIO '||codigo||' FUE ANULADO CON EXITO';
+		return 'OK';
+	end if;
+end
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+ALTER FUNCTION sp_presu(integer, integer, date, integer, integer, integer, integer, integer[], character varying)
+  OWNER TO postgres;
